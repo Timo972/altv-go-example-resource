@@ -8,4 +8,5 @@ server.cfg
 resources
 my-resource.h
 my-resource.dll
+*.dll
 cache
