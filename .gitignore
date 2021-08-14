@@ -1,0 +1,11 @@
+.altvrc
+data
+server.log
+update.json
+altv-server.exe
+crashdumps
+server.cfg
+resources
+my-resource.h
+my-resource.dll
+cache
