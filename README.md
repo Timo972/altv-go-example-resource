@@ -1,5 +1,5 @@
 # alt:V Go Resource Example
-Go module: https://github.com/shockdev04/altv-go-module
+Go module: https://github.com/shockdev04/altv-go-module  
 Go package: https://pkg.go.dev/github.com/shockdev04/altv-go-pkg/alt
 
 ## Get started
