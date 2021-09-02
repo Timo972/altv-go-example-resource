@@ -16,7 +16,7 @@ func randomNumber(min int, max int) int {
 	return rand.Intn(max-min) + min
 }
 
-func getRandomSpawn() alt.Position {
+func getRandomSpawn() alt.Vector3 {
 	return Spawns[uint(randomNumber(0, (len(Spawns)-1)))]
 }
 
@@ -56,9 +56,21 @@ func maxVehicle(vehicle *alt.Vehicle) error {
 	return nil
 }
 
+func SendNotificationToPlayer(p *alt.Player, message string, textColor uint, bgColor uint, blink bool) {
+	alt.EmitClient(p, "freeroam:sendNotification", textColor, bgColor, message, blink)
+}
+
+func SendNotificationToAllPlayer(message string, textColor uint, bgColor uint, blink bool) {
+	alt.EmitAllClients("freeroam:sendNotification", textColor, bgColor, message, blink)
+}
+
 //export OnStart
 func OnStart() {
-	alt.LogColored("~g~Resource Started")
+	alt.LogColored("~g~Go Resource Started")
+	chatBroadcast := alt.Import("chat", "broadcast").(alt.MValueFunc)
+	chatSend := alt.Import("chat", "send").(alt.MValueFunc)
+	chatRegisterCmd := alt.Import("chat", "registerCmd").(alt.MValueFunc)
+	//chatMutePlayer := alt.Import("chat", "mutePlayer").(alt.MValueFunc)
 
 	list := []interface{}{0, 1, 2, 3, "test", true, false}
 
@@ -118,27 +130,6 @@ func OnStart() {
 
 	return*/
 
-	alt.On.AllServerEvents(func(eventName string, args ...interface{}) {
-		alt.LogInfo(eventName)
-		for _, arg := range args {
-			println(arg)
-		}
-
-	})
-
-	alt.On.AllClientEvents(func(player *alt.Player, eventName string, args ...interface{}) {
-		alt.LogInfo(fmt.Sprintf("received event from player %v. name: %v, args: %v", player.Name(), eventName, args))
-		alt.EmitClient(player, "test", "Are you receiving at least this?")
-		player.Emit("test", "maybe this?")
-		player.Emit("test", "Are you receiving this?", 1, 2, 1.2, true, false)
-		alt.EmitAllClients("test", "fucking receive this message")
-
-		alt.LogInfo("preparing for EmitClients")
-
-		players := make([]*alt.Player, 0)
-		players = append(players, player)
-		alt.EmitClients(players, "test", "multiple clients emit test")
-	})
 	alt.On.EntityEnterColShape(func(c *alt.ColShape, entity interface{}) {
 		if entity == nil {
 			alt.LogError("No entity entered ColShape")
@@ -167,6 +158,7 @@ func OnStart() {
 		}
 
 	})
+
 	alt.On.PlayerConnect(func(p *alt.Player) {
 		alt.LogInfo(fmt.Sprintf("Player %s %v connected with ip %s", p.Name(), p.ID(), p.IP()))
 
@@ -176,24 +168,26 @@ func OnStart() {
 		}
 
 		p.SetModel(alt.Hash(SpawnModels[uint(randomNumber(0, len(SpawnModels)-1))]))
-		//p.SetMetaData("vehicles", make([]*alt.Vehicle, 0))
+		p.SetMetaData("vehicles", make([]*alt.Vehicle, 0))
 
 		spawn := getRandomSpawn()
 
 		p.Spawn(spawn, 0)
 
+		p.Emit("freeroam:spawned")
+		p.Emit("freeroam:Interiors")
+
 		//TODO fix timers and replace it with timeout 1000
 		go func() {
-			if p.Valid() {
+			if p != nil && p.Valid() {
 				playerCount := len(alt.GetPlayers())
-				//	//TODO add resource imports to module to use js chat
-				alt.LogInfo(fmt.Sprintf("%v has joined the Server.. (%v players online)", p.Name(), playerCount))
-				alt.LogInfo("Press T and type /help to see all available commands..")
+				chatBroadcast(fmt.Sprintf("{1cacd4}%v {ffffff}has {00ff00}joined {ffffff}the Server.. (%v players online)", p.Name(), playerCount))
+				chatSend(p, "{80eb34}Press {34dfeb}T {80eb34}and type {34dfeb}/help {80eb34}to see all available commands..")
 			}
 			//TODO clear timeout to reduce timer count
 		}()
 
-		// mp_m_freemode_01 -> alt.Hash function missing
+		// mp_m_freemode_01 hashed
 		// p.SetModel(1885233650)
 		// p.Spawn(alt.Position{X: 1070.206, Y: -711.958, Z: 58.483}, 0)
 		// p.SetArmour(200)
@@ -211,126 +205,229 @@ func OnStart() {
 		//go func() {
 		if p.Valid() {
 			p.Spawn(spawn, 0)
+			p.Emit("freeroam:switchInOutPlayer", true)
 			p.ClearBloodDamage()
 		}
 		//TODO clear timer
 		//}()
 
 		if killer != nil {
-			if killer.(*alt.BaseObject).Type == alt.PlayerObject {
-				alt.LogInfo(fmt.Sprintf("~r~%v ~s~killed ~b~%v", killer.(*alt.Player).Name(), p.Name()))
+			if player, ok := killer.(*alt.Player); ok {
+				alt.LogInfo(player.Name(), "gave", p.Name(), "the rest!")
+				SendNotificationToAllPlayer(fmt.Sprintf(`~r~<C>%v</C> ~s~killed ~b~<C>%v</C>`, player.Name(), p.Name()), 0, 2, false)
+			} else if vehicle, ok := killer.(*alt.Vehicle); ok {
+				alt.LogInfo(vehicle.NumberPlateText(), "(Vehicle) gave", p.Name(), "the rest!")
+				SendNotificationToAllPlayer(fmt.Sprintf(`~r~<C>%v</C> (Vehicle) ~s~killed ~b~<C>%v</C>`, vehicle.NumberPlateText(), p.Name()), 0, 2, false)
 			}
 		} else {
-			alt.LogInfo(fmt.Sprintf("~s~Suicide ~b~%v", p.Name()))
+			alt.LogInfo(p.Name(), "died!")
+			SendNotificationToAllPlayer(fmt.Sprintf("~s~Suicide ~b~%v", p.Name()), 0, 2, false)
 		}
 	})
 
 	alt.On.PlayerDisconnect(func(p *alt.Player, reason string) {
 		playerCount := len(alt.GetPlayers())
-		alt.LogColored(fmt.Sprintf("%v has left the Server.. (%v players online)", p.Name(), playerCount))
+		chatBroadcast(fmt.Sprintf("%v has left the Server.. (%v players online)", p.Name(), playerCount))
 		vehicles := p.GetMetaData("vehicles")
 		vehs, ok := vehicles.([]*alt.Vehicle)
 		if ok {
-			p.DeleteMetaData("vehicles")
+			for _, vehicle := range vehs {
+				vehicle.Destroy()
+			}
 		}
-		for _, vehicle := range vehs {
-			vehicle.Destroy()
-		}
+		p.DeleteMetaData("vehicles")
 	})
 
-	alt.On.ConsoleCommand(func(command string, args []string) {
-		if command == "veh" && len(args) == 2 {
-			players := alt.GetPlayersByName(args[0])
-			model := args[1]
+	// =============================== Commands Begin ==================================================
 
-			if players == nil || len(players) < 1 {
-				alt.LogError(fmt.Sprintf("No player with name %v found", args[0]))
-				return
-			}
-
-			player := players[0]
-
-			rot := player.Rotation()
-			pos := GetPositionInFront(player.Position(), rot, 3)
-
-			veh, err := alt.CreateVehicle(alt.Hash(model), pos, rot)
-
-			if err != nil {
-				alt.LogError(fmt.Sprintf("Could not create vehicle, invalid model: %v", args[1]))
-				return
-			}
-
-			veh.SetNumberplateText("GO<3")
-
-			playerVehiclesMeta := player.GetMetaData("vehicles")
-
-			if playerVehiclesMeta == nil {
-				return
-			}
-
-			playerVehicles := playerVehiclesMeta.([]*alt.Vehicle)
-
-			if len(playerVehicles) > 2 {
-				lastVeh := playerVehicles[0]
-				lastVeh.Destroy()
-				playerVehicles = playerVehicles[1:]
-			}
-
-			playerVehicles = append(playerVehicles, veh)
-
-			player.SetMetaData("vehicles", playerVehicles)
+	chatRegisterCmd("help", func(args ...interface{}) interface{} {
+		player, ok := args[0].(*alt.Player)
+		if !ok {
+			return nil
 		}
-
-		if command == "vehmax" && len(args) == 1 {
-			players := alt.GetPlayersByName(args[0])
-			if players == nil || len(players) < 1 {
-				alt.LogError(fmt.Sprintf("No player with name %v found", args[0]))
-				return
-			}
-
-			vehicle := players[0].Vehicle()
-
-			if vehicle == nil || !vehicle.Valid() {
-				alt.LogError("Player is not in a vehicle")
-				return
-			}
-
-			err := maxVehicle(vehicle)
-
-			if err != nil {
-				alt.LogError(err.Error())
-				return
-			}
-		}
-
-		if command == "weapon" && len(args) == 2 {
-			players := alt.GetPlayersByName(args[0])
-			weaponName := args[1]
-
-			if players == nil || len(players) < 1 {
-				alt.LogError(fmt.Sprintf("No player with name %v found", args[0]))
-				return
-			}
-
-			model, err := getWeaponModel(weaponName)
-
-			if err != nil {
-				alt.LogError(err.Error())
-				return
-			}
-
-			player := players[0]
-
-			player.GiveWeapon(model, 999, true)
-		}
+		chatSend(player, "{ff0000}========== {eb4034}HELP {ff0000} ==========")
+		chatSend(player, "{ff0000}= {34abeb}/veh {40eb34}(model)   {ffffff} Spawn a Vehicle")
+		chatSend(player, "{ff0000}= {34abeb}/tp {40eb34}(targetPlayer)   {ffffff} Teleport to Player")
+		chatSend(player, "{ff0000}= {34abeb}/model {40eb34}(modelName)   {ffffff} Change Player Model")
+		chatSend(player, "{ff0000}= {34abeb}/weapon {40eb34}(weaponName)   {ffffff} Get specified weapon")
+		chatSend(player, "{ff0000}= {34abeb}/weapons    {ffffff} Get all weapons")
+		chatSend(player, "{ff0000} ========================")
+		return nil
 	})
 
-	//alt.On.ConsoleCommand(func(command string, args []string) {
-	//	alt.LogColored(fmt.Sprintf("~y~%v ~r~Args: %v", command, args))
-	//})
+	chatRegisterCmd("veh", func(args ...interface{}) interface{} {
+		player, ok := args[0].(*alt.Player)
+		if !ok {
+			return nil
+		}
+
+		if len(args) < 2 {
+			chatSend(player, "Usage: /veh (vehicleModel)")
+			return nil
+		}
+
+		model, ok := args[1].(string)
+		if !ok {
+			chatSend(player, "Usage: /veh (vehicleModel)")
+			return nil
+		}
+
+		pos := player.Position()
+		vehicle, err := alt.CreateVehicle(alt.Hash(model), pos, alt.Vector3{X: 0, Y: 0, Z: 0})
+		if err != nil {
+			chatSend(player, fmt.Sprintf(`{ff0000} Vehicle Model {ff9500}%v {ff0000}does not exist..`, model))
+			alt.LogError(err.Error())
+			return nil
+		}
+
+		vehicle.SetNumberplateText("GO<3")
+
+		pVehs := player.GetMetaData("vehicles")
+		playerVehicles, ok := pVehs.([]*alt.Vehicle)
+		if !ok {
+			return nil
+		}
+
+		if len(playerVehicles) >= 3 {
+			toDestroy := playerVehicles[0]
+			playerVehicles = playerVehicles[1:]
+
+			if toDestroy != nil && toDestroy.Valid() {
+				toDestroy.Destroy()
+			}
+		}
+
+		playerVehicles = append(playerVehicles, vehicle)
+		player.SetMetaData("vehicles", playerVehicles)
+
+		return nil
+	})
+
+	chatRegisterCmd("pos", func(args ...interface{}) interface{} {
+		player, ok := args[0].(*alt.Player)
+		if !ok {
+			return nil
+		}
+
+		pos := player.Position()
+		alt.LogInfo("Position:", pos)
+		chatSend(player, fmt.Sprintf("Position: %v, %v, %v", pos.X, pos.Y, pos.Z))
+		return nil
+	})
+
+	chatRegisterCmd("tp", func(args ...interface{}) interface{} {
+		player, ok := args[0].(*alt.Player)
+		if !ok {
+			return nil
+		}
+
+		if len(args) < 2 {
+			chatSend(player, "Usage: /tp (target player)")
+			return nil
+		}
+
+		targetName, ok := args[1].(string)
+		if !ok {
+			chatSend(player, "Usage: /tp (target player)")
+			return nil
+		}
+
+		targetPlayers := alt.GetPlayersByName(targetName)
+
+		if len(targetPlayers) < 1 {
+			chatSend(player, fmt.Sprintf("{ff0000} Player {ff9500}%v {ff0000}not found..", targetName))
+			return nil
+		}
+
+		player.SetPosition(targetPlayers[0].Position())
+		chatSend(player, fmt.Sprintf("You got teleported to {1cacd4}%v{ffffff}", targetName))
+
+		return nil
+	})
+
+	chatRegisterCmd("model", func(args ...interface{}) interface{} {
+		player, ok := args[0].(*alt.Player)
+		if !ok {
+			return nil
+		}
+
+		if len(args) < 2 {
+			chatSend(player, "Usage: /model (modelName)")
+			return nil
+		}
+
+		model, ok := args[1].(string)
+		if !ok {
+			chatSend(player, "Usage: /model (modelName)")
+			return nil
+		}
+
+		player.SetModel(alt.Hash(model))
+
+		return nil
+	})
+
+	chatRegisterCmd("weapon", func(args ...interface{}) interface{} {
+		player, ok := args[0].(*alt.Player)
+		if !ok {
+			return nil
+		}
+
+		if len(args) < 2 {
+			chatSend(player, "Usage: /weapon (modelName)")
+			return nil
+		}
+
+		model, ok := args[1].(string)
+		if !ok {
+			chatSend(player, "Usage: /weapon (modelName)")
+			return nil
+		}
+
+		player.GiveWeapon(alt.Hash("weapon_"+model), 500, true)
+
+		return nil
+	})
+
+	chatRegisterCmd("weapons", func(args ...interface{}) interface{} {
+		player, ok := args[0].(*alt.Player)
+		if !ok {
+			return nil
+		}
+
+		for _, weapon := range WeaponModels {
+			player.GiveWeapon(alt.Hash("weapon_"+weapon), 500, true)
+		}
+
+		return nil
+	})
+
+	chatRegisterCmd("vehmax", func(args ...interface{}) interface{} {
+		player, ok := args[0].(*alt.Player)
+		if !ok {
+			return nil
+		}
+
+		vehicle := player.Vehicle()
+
+		if vehicle == nil || !vehicle.Valid() {
+			alt.LogError("Player is not in a vehicle")
+			chatSend(player, "Usage: /vehmax [only when in vehicle]")
+			return nil
+		}
+
+		err := maxVehicle(vehicle)
+
+		if err != nil {
+			alt.LogError(err.Error())
+			return nil
+		}
+
+		return nil
+	})
 }
 
 //export OnStop
 func OnStop() {
-	alt.LogInfo("Resource Stopped")
+	alt.LogColored("~r~Go Resource Stopped")
 }

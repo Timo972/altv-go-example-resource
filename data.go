@@ -2,7 +2,7 @@ package main
 
 import "github.com/shockdev04/altv-go-pkg/alt"
 
-var Spawns = []alt.Position{
+var Spawns = []alt.Vector3{
 	{X: -695.1956176757812, Y: 83.94725036621094, Z: 55.85205078125},
 	{X: -527.6835327148438, Y: -678.7252807617188, Z: 33.6607666015625},
 	{X: 200.6637420654297, Y: -935.2879028320312, Z: 30.6783447265625},
