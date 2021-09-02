@@ -11,3 +11,5 @@ my-resource.dll
 *.dll
 cache
 modules
+.vscode
+Makefile

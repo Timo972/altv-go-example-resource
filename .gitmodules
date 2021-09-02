@@ -1,6 +1,0 @@
-[submodule "altv-go-module"]
-	path = altv-go-module
-	url = https://github.com/Timo972/altv-go-module
-[submodule "altv-go-pkg"]
-	path = altv-go-pkg
-	url = https://github.com/Timo972/altv-go-pkg
