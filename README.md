@@ -17,3 +17,8 @@ if you are on linux:
 To run this resource you need the official alt:V Chat resource
 
 Things should work as in default go.
+
+intern function not working
+get config should be sent using protobuf dict & parsed by interface reflect value ptr
+add missing vehicle api
+add missing core api

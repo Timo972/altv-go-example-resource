@@ -1,6 +1,6 @@
 package main
 
-import "github.com/shockdev04/altv-go-pkg/alt"
+import "github.com/timo972/altv-go-pkg/alt"
 
 var Spawns = []alt.Vector3{
 	{X: -695.1956176757812, Y: 83.94725036621094, Z: 55.85205078125},

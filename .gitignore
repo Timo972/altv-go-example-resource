@@ -13,3 +13,5 @@ cache
 modules
 .vscode
 Makefile
+package.json
+main.go*
